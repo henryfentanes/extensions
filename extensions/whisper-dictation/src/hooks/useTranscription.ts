@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import { execFile } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -71,8 +71,17 @@ export function useTranscription({
   aiErrorMessage,
   skipAIForSession,
 }: UseTranscriptionProps) {
+  // Guard to prevent double-paste on macOS Tahoe/Sequoia (see GitHub issue #23141)
+  const hasPastedRef = useRef(false);
+
   const handlePasteAndCopy = useCallback(
     async (text: string) => {
+      if (hasPastedRef.current) {
+        console.log("Paste already executed, skipping duplicate");
+        return;
+      }
+      hasPastedRef.current = true;
+
       try {
         await Clipboard.copy(text);
         await Clipboard.paste(text);
@@ -119,6 +128,11 @@ export function useTranscription({
 
       const handleClipboardActionAndClose = async (action: "paste" | "copy", text: string) => {
         if (action === "paste") {
+          if (hasPastedRef.current) {
+            console.log("Paste already executed, skipping duplicate");
+            return;
+          }
+          hasPastedRef.current = true;
           await Clipboard.paste(text);
           await showHUD("Pasted transcribed text");
         } else {
